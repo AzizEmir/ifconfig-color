@@ -1,54 +1,51 @@
 # ifconfig-color
 
-`ifconfig-color` is a shell script that enhances the readability of `ifconfig` output by applying color to various elements. This makes it easier to interpret network interface details, packet counts, MAC addresses, and more.
+`ifconfig-color` is a python code that enhances the readability of `ifconfig` output by applying color to various elements. This makes it easier to interpret network interface details, packet counts, MAC addresses, and more.
 
-![image](https://github.com/user-attachments/assets/17bb7f48-f69c-4212-8aeb-cd4803ee27ef)
+![image](https://github.com/user-attachments/assets/3df7edc7-bdf2-4cf3-bea4-4d140bcd187f)
 
-### Add the Alias to Your Shell Configuration:
 
-```bash
-alias ifconfig-color='ifconfig | awk '\''BEGIN {
-    # Renk kodları
-    BRIGHT_YELLOW="\033[93m"    # Parlak altın sarısı
-    BRIGHT_MAGENTA="\033[95m"   # Parlak mor
-    BRIGHT_BLUE="\033[94m"      # Parlak mavi
-    BRIGHT_GREEN="\033[92m"     # Parlak yeşil
-    RESET="\033[0m"
+```python3
+import re
+import subprocess
+
+# ifconfig çıktısını al
+ifconfig_output = subprocess.check_output(['ifconfig'], text=True)
+
+# Regex desenleri ve renk kodlarını tutan bir sözlük
+patterns_and_colors = {
+    # 'prefixlen' değerini tespit et ve magenta (pembe) renkte vurgula
+    r'(?<=prefixlen\s)\d+': "\033[38;2;255;0;255m",  # magenta 	#FF00FF rgb(255,0,255)
+    
+    # 'scopeid' değerini tespit et ve magenta (pembe) renkte vurgula
+    r'(?<=scopeid\s0x)[a-fA-F0-9]+': "\033[38;2;255;0;255m",  # magenta 	#FF00FF rgb(255,0,255)
+    
+    # 'KiB' veya 'MiB' ile biten sayıları tespit et ve magenta (pembe) renkte vurgula
+    r'\(\d+(\.\d+)?\s(KiB|MiB)\)': "\033[38;2;255;0;255m",  # magenta 	#FF00FF rgb(255,0,255)
+    
+    # Ağ yapılandırma ile ilgili anahtar kelimeleri (inet6, ether, prefixlen, vb.) sarı renkte vurgula
+    r'\b(inet6|inet|netmask|broadcast|ether|prefixlen|scopeid|RX packets|TX packets)\b': "\033[38;2;255;200;0m",  # yellow #FF8C00 rgb(255,140,0)
+    
+    # IPv4 adreslerini tespit et ve magenta (pembe) renkte vurgula
+    r'(\b25[0-5]|\b2[0-4][0-9]|\b[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}': "\033[38;2;255;0;255m",  # magenta #FF00FF rgb(255,0,255)
+    
+    # Arayüz isimlerini (örneğin 'eth0', 'wlan0') tespit et ve mavi renkte vurgula
+    r'^([\w-]+):': "\033[38;2;30;144;255m",  # rgb(30, 144, 255) mavi
+    
+    # MAC adreslerini tespit et ve yeşil renkte vurgula
+    r'(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}': "\033[38;2;0;255;144m",  # rgb(0, 255, 144) yeşil
+
+    # ipv6
+    r'(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])) ':"\033[38;2;255;0;255m", # mediumpurple 	#9370DB 	rgb(147,112,219)
 }
-{
-    # Arayüz isimlerini parlak mavi renkle
-    if (match($0, /^[a-zA-Z0-9:_]+:/)) {
-        interface_name = substr($0, 1, RLENGTH)
-        rest_of_line = substr($0, RLENGTH + 1)
-        print BRIGHT_BLUE interface_name RESET rest_of_line
-    } else {
-        # RX packets ve TX packets başlıklarını parlak yeşil ile renklendir
-        gsub(/RX packets/, BRIGHT_GREEN "&" RESET)
-        gsub(/TX packets/, BRIGHT_GREEN "&" RESET)
-        
-        # Boyut bilgilerini parlak yeşil ile renklendir
-        gsub(/\([0-9.]+ [KMGTPE]iB\)/, BRIGHT_GREEN "&" RESET)
-        
-        # "ether" ve MAC adresini renklendir
-        gsub(/ether /, BRIGHT_YELLOW "&" RESET)
-        gsub(/[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}/, BRIGHT_MAGENTA "&" RESET)
-        
-        # "inet", "netmask", ve "broadcast" kelimelerini parlak altın sarı ile renklendir
-        gsub(/inet |netmask |broadcast /, BRIGHT_YELLOW "&" RESET)
-        
-        # IP adreslerini parlak mor ile renklendir
-        gsub(/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/, BRIGHT_MAGENTA "&" RESET)
 
-        print
-    }
-}
-'\'''
-```
+# Her bir regex deseni ve renk kodu için işlemleri uygula
+highlighted_output = ifconfig_output
 
-### Usage
+for pattern, color_code in patterns_and_colors.items():
+    # Eşleşen kısımları renklendirmek için regex'i uygula
+    highlighted_output = re.sub(pattern, lambda match: f"{color_code}{match.group(0)}\033[0m", highlighted_output, flags=re.M)
 
-After adding the alias, simply run:
-
-```bash
-ifconfig-color
+# Renklendirilmiş çıktıyı terminale yazdır
+print(highlighted_output)
 ```
